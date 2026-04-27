@@ -12,8 +12,10 @@ manifest) but not validated. See
 [Contributing → Help wanted: macOS validation](#help-wanted-macos-validation).
 
 **Pinned versions:** Capsule 0.10.4 (chart pre-rendered with `helm template`,
-sha256-verified). cert-manager 1.18.3 is pinned for the in-tree smoke test
-only — it is **not** part of the public `capsule_install` contract.
+sha256-verified). cert-manager wiring lives in
+[`rules_certmanager`](https://github.com/collider-bazel-extensions/rules_certmanager) —
+not part of the public `capsule_install` contract; see [TLS provider
+prerequisite](#tls-provider-prerequisite).
 
 > **Note on hermeticity.** The Capsule manifest is fully pinned and committed
 > at `private/manifests/`. `kubectl` is **not** vendored — v0.1 trusts host
@@ -153,6 +155,7 @@ The shape used by this repo's own smoke test:
 
 ```python
 load("@rules_capsule//:defs.bzl", "capsule_install", "capsule_health_check")
+load("@rules_certmanager//:defs.bzl", "cert_manager_install", "cert_manager_health_check")
 load("@rules_itest//:itest.bzl", "itest_service", "service_test")
 load("@rules_kind//:defs.bzl", "kind_cluster", "kind_health_check")
 load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
@@ -163,46 +166,50 @@ kind_cluster(name = "cluster", k8s_version = "1.29")
 kind_health_check(name = "cluster_health", cluster = ":cluster")
 itest_service(name = "kind_svc", exe = ":cluster", health_check = ":cluster_health")
 
-# 2. cert-manager (TLS provider for Capsule's webhooks). The wrapper script
-#    sources the kind cluster's env file ($TEST_TMPDIR/<cluster>.env, which
-#    rules_kind writes) to pick up KUBECONFIG, then `kubectl apply`s a pinned
-#    cert-manager.yaml and waits for its Deployments to become Available.
+# 2. cert-manager (TLS provider for Capsule's webhooks), via rules_certmanager.
+#    The cluster-source-agnostic rule binaries are bound to the rules_kind
+#    cluster by thin wrappers that source $TEST_TMPDIR/<cluster>.env (set -a
+#    so KUBECONFIG/KUBECTL cross the `exec` boundary).
+cert_manager_install(name = "cert_manager_bin")
+cert_manager_health_check(name = "cert_manager_health_bin")
 sh_binary(
-    name = "cert_manager_install",
-    srcs = ["cert_manager_install.sh"],
-    data = ["@cert_manager_yaml//file"],
-    env = {"CERT_MANAGER_YAML": "$(rootpath @cert_manager_yaml//file)"},
+    name = "cert_manager_install_wrapper",
+    srcs = ["cert_manager_install_wrapper.sh"],
+    data = [":cert_manager_bin"],
 )
-sh_binary(name = "cert_manager_health", srcs = ["cert_manager_health.sh"])
+sh_binary(
+    name = "cert_manager_health_wrapper",
+    srcs = ["cert_manager_health_wrapper.sh"],
+    data = [":cert_manager_health_bin"],
+)
 itest_service(
     name = "cert_manager_svc",
-    exe = ":cert_manager_install",
+    exe = ":cert_manager_install_wrapper",
     deps = [":kind_svc"],
-    health_check = ":cert_manager_health",
+    health_check = ":cert_manager_health_wrapper",
 )
 
-# 3. Capsule itself.
+# 3. Capsule itself — same wrapper pattern as cert-manager.
 capsule_install(name = "capsule_bin")
 capsule_health_check(name = "capsule_health_bin")
-
-# 4. Wrapper that sources the kind env file (sets KUBECONFIG) and exec's the
-#    capsule_install rule's binary. Lives in tests/ because it binds the
-#    cluster-source-agnostic capsule_install rule to a specific rules_kind
-#    cluster — that binding is the consumer's responsibility, not the rule's.
 sh_binary(
     name = "capsule_install_wrapper",
     srcs = ["capsule_install_wrapper.sh"],
     data = [":capsule_bin"],
-    env = {"CAPSULE_INSTALL": "$(rootpath :capsule_bin)"},
+)
+sh_binary(
+    name = "capsule_health_wrapper",
+    srcs = ["capsule_health_wrapper.sh"],
+    data = [":capsule_health_bin"],
 )
 itest_service(
     name = "capsule_svc",
     exe = ":capsule_install_wrapper",
     deps = [":cert_manager_svc"],
-    health_check = ":capsule_health_bin",
+    health_check = ":capsule_health_wrapper",
 )
 
-# 5. The actual test: create a Tenant, assert it's accepted + Active.
+# 4. The actual test: create a Tenant, assert it's accepted + Active.
 sh_test(name = "smoke_test_bin", srcs = ["smoke_test.sh"])
 service_test(
     name = "smoke_test",
@@ -239,18 +246,21 @@ cluster (almost always [cert-manager](https://cert-manager.io/), occasionally
 [trust-manager](https://github.com/cert-manager/trust-manager) or a custom
 issuer) to mint them.
 
-This rule does not own that piece — by design (DESIGN.md decision #6). Two
-reasons:
+This rule does not own that piece — by design (DESIGN.md decision #6).
+Reasons:
 
 1. cert-manager is small, pinning is trivial, and many consumers already
    have it deployed by other means (Helm, ArgoCD, etc.). Owning it in
    `rules_capsule` would force a duplicate install path on those users.
-2. Keeping the surface focused makes a future `rules_certmanager` extraction
-   a non-breaking change.
+2. Keeping the surface focused lets the cert-manager wiring live in its
+   own focused rule set — [`rules_certmanager`](https://github.com/collider-bazel-extensions/rules_certmanager)
+   — which any consumer can compose with rules_capsule (or use
+   independently for any operator that needs cert-manager).
 
-For the in-tree smoke test we pin cert-manager 1.18.3 explicitly via
-`http_file` in `MODULE.bazel` and apply it as a separate `itest_service`
-upstream of `capsule_install` — see the example above for the shape.
+For the in-tree smoke test we depend on `rules_certmanager` directly
+(`bazel_dep` with `dev_dependency = True`) and apply it as a separate
+`itest_service` upstream of `capsule_install`. See the example above for
+the shape, or `tests/BUILD.bazel` for the canonical wiring.
 
 ---
 

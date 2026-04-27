@@ -23,12 +23,14 @@ use_repo(capsule, "capsule")
 
 register_toolchains("@capsule//:all")
 
-# ---- dev-only: rules_kind + rules_itest for the smoke test ------------------
-# Consumers do NOT inherit these. The in-tree smoke test composes a kind
-# cluster, cert-manager, and capsule_install via rules_itest. rules_kind is
-# pinned via git_override since it is not (yet) in BCR.
+# ---- dev-only: smoke test composition ---------------------------------------
+# Consumers do NOT inherit any of these. The in-tree smoke test composes a
+# kind cluster, cert-manager (via rules_certmanager), and capsule_install via
+# rules_itest. Both sibling rule sets are pinned via git_override since they
+# are not (yet) in BCR.
 bazel_dep(name = "rules_itest", version = "0.0.52", dev_dependency = True)
 bazel_dep(name = "rules_shell", version = "0.8.0", dev_dependency = True)
+
 bazel_dep(name = "rules_kind", version = "0.1.1", dev_dependency = True)
 git_override(
     module_name = "rules_kind",
@@ -36,16 +38,14 @@ git_override(
     commit = "3f4ff6166c120f9594f572350648c8a9af8616c8",  # v0.1.1 — rootless-podman TMPDIR fix + CI matrix
 )
 
-# cert-manager.yaml fetched at the sha256 pinned in private/versions.bzl. Used
-# only by the in-tree smoke test (decision #6) — not exported as a public dep.
-http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
-# cert-manager 1.20.x uses CRD `selectableFields` (k8s 1.30+). Our smoke test
-# pins kind to k8s 1.29 (rules_kind's only supported version at the pinned
-# commit), so we need a cert-manager release that doesn't use that field.
-# 1.18.3 is the most recent that works against k8s 1.29.
-http_file(
-    name = "cert_manager_yaml",
-    urls = ["https://github.com/cert-manager/cert-manager/releases/download/v1.18.3/cert-manager.yaml"],
-    sha256 = "f12a78d93d77e1eb9dea0b6d7c931b26da287492fcdf0eb58620142883d4675a",
-    downloaded_file_path = "cert-manager.yaml",
+bazel_dep(name = "rules_certmanager", version = "0.1.2", dev_dependency = True)
+git_override(
+    module_name = "rules_certmanager",
+    remote = "https://github.com/collider-bazel-extensions/rules_certmanager",
+    commit = "bff7f86589c7a58a42a989f08cb098d790963f06",  # v0.1.2 — block install on Deployments-Available
 )
+
+cert_manager = use_extension("@rules_certmanager//:extensions.bzl", "cert_manager", dev_dependency = True)
+cert_manager.version(version = "1.18.3")
+use_repo(cert_manager, "cert_manager")
+register_toolchains("@cert_manager//:all", dev_dependency = True)

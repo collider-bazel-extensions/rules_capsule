@@ -8,6 +8,7 @@
 """
 
 load("@rules_capsule//:defs.bzl", "capsule_health_check", "capsule_install")
+load("@rules_certmanager//:defs.bzl", "cert_manager_health_check", "cert_manager_install")
 load("@rules_itest//:itest.bzl", "itest_service", "service_test")
 load("@rules_kind//:defs.bzl", "kind_cluster", "kind_health_check")
 load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
@@ -46,29 +47,30 @@ itest_service(
     tags = ["manual"],
 )
 
-# cert-manager: applies the pinned cert-manager.yaml fetched by the
-# http_file repo rule in MODULE.bazel.
+# cert-manager via rules_certmanager. Same wrapper pattern as capsule:
+# the rule binaries are cluster-source-agnostic; thin sh_binary wrappers
+# source the kind cluster's env file before exec'ing them.
+cert_manager_install(name = "cert_manager_bin", tags = ["manual"])
+
+cert_manager_health_check(name = "cert_manager_health_bin", tags = ["manual"])
+
 sh_binary(
-    name = "cert_manager_install",
-    srcs = ["cert_manager_install.sh"],
-    data = ["@cert_manager_yaml//file"],
-    env = {
-        "CLUSTER_NAME": "cluster",
-        "CERT_MANAGER_YAML": "$(rootpath @cert_manager_yaml//file)",
-    },
+    name = "cert_manager_install_wrapper",
+    srcs = ["cert_manager_install_wrapper.sh"],
+    data = [":cert_manager_bin"],
 )
 
 sh_binary(
-    name = "cert_manager_health",
-    srcs = ["cert_manager_health.sh"],
-    env = {"CLUSTER_NAME": "cluster"},
+    name = "cert_manager_health_wrapper",
+    srcs = ["cert_manager_health_wrapper.sh"],
+    data = [":cert_manager_health_bin"],
 )
 
 itest_service(
     name = "cert_manager_svc",
-    exe = ":cert_manager_install",
+    exe = ":cert_manager_install_wrapper",
     deps = [":kind_svc"],
-    health_check = ":cert_manager_health",
+    health_check = ":cert_manager_health_wrapper",
     tags = ["manual"],
 )
 

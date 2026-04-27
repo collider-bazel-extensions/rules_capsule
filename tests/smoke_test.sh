@@ -11,7 +11,13 @@ env_file="$TEST_TMPDIR/${CLUSTER_NAME}.env"
 source "$env_file"
 
 echo "smoke_test: creating Tenant 'alice'"
-"$KUBECTL" --kubeconfig="$KUBECONFIG" apply -f - <<'EOF'
+# Capsule's validating webhook may briefly refuse connections after
+# Deployment goes Available — Service endpoints lag readiness, and
+# cert-manager's CA injection into the ValidatingWebhookConfiguration
+# completes asynchronously. Retry for up to 60s.
+deadline=$(( $(date +%s) + 60 ))
+while :; do
+  if "$KUBECTL" --kubeconfig="$KUBECONFIG" apply -f - <<'EOF' 2>/tmp/apply.err
 apiVersion: capsule.clastix.io/v1beta2
 kind: Tenant
 metadata:
@@ -21,6 +27,17 @@ spec:
     - kind: User
       name: alice@example.com
 EOF
+  then
+    break
+  fi
+  if (( $(date +%s) >= deadline )); then
+    echo "smoke_test: FAIL — Tenant apply never accepted by webhook" >&2
+    cat /tmp/apply.err >&2
+    exit 1
+  fi
+  echo "smoke_test: webhook not ready yet ($(cat /tmp/apply.err | head -1)); retrying"
+  sleep 2
+done
 
 echo "smoke_test: waiting for Capsule to reconcile"
 deadline=$(( $(date +%s) + 30 ))

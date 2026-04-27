@@ -29,11 +29,11 @@ register_toolchains("@capsule//:all")
 # pinned via git_override since it is not (yet) in BCR.
 bazel_dep(name = "rules_itest", version = "0.0.52", dev_dependency = True)
 bazel_dep(name = "rules_shell", version = "0.8.0", dev_dependency = True)
-bazel_dep(name = "rules_kind", version = "0.1.0", dev_dependency = True)
+bazel_dep(name = "rules_kind", version = "0.1.1", dev_dependency = True)
 git_override(
     module_name = "rules_kind",
     remote = "https://github.com/collider-bazel-extensions/rules_kind",
-    commit = "9c587cb92d50a66cfe8cd07899d60cd41b805faa",
+    commit = "3f4ff6166c120f9594f572350648c8a9af8616c8",  # v0.1.1 — rootless-podman TMPDIR fix + CI matrix
 )
 
 # cert-manager.yaml fetched at the sha256 pinned in private/versions.bzl. Used

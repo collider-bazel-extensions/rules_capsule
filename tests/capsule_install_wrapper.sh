@@ -1,13 +1,20 @@
 #!/usr/bin/env bash
-# Sources the kind cluster's env file (which sets KUBECONFIG) and then exec's
-# the rules_capsule capsule_install binary. The capsule_install rule itself
-# is cluster-source-agnostic — this wrapper is what binds it to a specific
-# rules_kind cluster. Lives in tests/ (not the public rule) per
-# DESIGN.md decision #9.
+# Sources the kind cluster's env file (which uses bare `KEY=VALUE` lines, no
+# `export`) under `set -a` so KUBECONFIG/KUBECTL propagate across the `exec`
+# boundary. Resolves the capsule_install bin via runfiles (sh_binary's `env=`
+# attr only fires under `bazel run`, not when itest exec's the wrapper).
 set -euo pipefail
 
 CLUSTER_NAME="cluster"
-CAPSULE_INSTALL="${CAPSULE_INSTALL:?missing}"
+
+if [[ -z "${RUNFILES_DIR:-}" ]]; then
+  if [[ -d "${0}.runfiles" ]]; then RUNFILES_DIR="${0}.runfiles"
+  elif [[ -d "$(dirname "$0").runfiles" ]]; then RUNFILES_DIR="$(dirname "$0").runfiles"
+  fi
+  export RUNFILES_DIR
+fi
+CAPSULE_INSTALL="${RUNFILES_DIR}/_main/tests/capsule_bin.sh"
+[[ -x "$CAPSULE_INSTALL" ]] || { echo "wrapper: capsule_bin not at $CAPSULE_INSTALL" >&2; exit 1; }
 
 env_file="$TEST_TMPDIR/${CLUSTER_NAME}.env"
 deadline=$(( $(date +%s) + 60 ))
@@ -19,9 +26,9 @@ while [[ ! -f "$env_file" ]]; do
   sleep 1
 done
 
+set -a
 # shellcheck disable=SC1090
 source "$env_file"
+set +a
 
-# The kind env file exports KUBECONFIG; capsule_install's launcher reads
-# whatever kubeconfig_env points at (default: KUBECONFIG). Just exec it.
 exec "$CAPSULE_INSTALL"

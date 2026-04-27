@@ -47,8 +47,8 @@ Anything Capsule-specific is flagged.
 | `capsule_install`, `capsule_health_check` rules | planned |
 | `launcher.py` (env, exec, SIGTERM forwarding) | planned |
 | Analysis tests | planned |
-| In-tree smoke test (cert-manager + Capsule against kind) | **build-validated** (`bazel build //tests:smoke_test` green; analyses + resolves the kind/cert-manager/Capsule chain). |
-| End-to-end `bazel test //tests:smoke_test` execution | **gated on two upstreams.** (1) [rules_kind#1](https://github.com/collider-bazel-extensions/rules_kind/issues/1) — the launcher propagates Bazel's long `TEST_TMPDIR` via `TMPDIR`/`HOME`, exceeding the 108-char unix-socket limit and breaking rootless-podman's `conmon-term` socket. With a local patch that clears `TMPDIR`/`HOME` to short paths, kind comes up cleanly. (2) Rootless-podman cannot run kind workloads that bind-mount system files (`runc create failed: error mounting /etc/hostname: operation not permitted`); cert-manager hits this. Workaround for either: run on a host with Docker (or rootful podman). |
+| In-tree smoke test (cert-manager + Capsule against kind) | **green** end-to-end on rootless podman (Fedora 43, k8s 1.29). Composition: kind cluster → cert-manager → capsule_install → capsule_health_check → service_test that creates a Tenant and asserts `status.state == Active`. ~80 s total. |
+| End-to-end `bazel test //tests:smoke_test` execution | **green** locally with rules_kind v0.1.1 (which carries the rootless-podman `$TMPDIR` fix). The earlier rootless-podman + nested-containerd `/etc/hostname` mount concern did not actually trigger. Still SELinux-permissive-mode-only on Fedora until a separate selectable-boolean fix lands; runs unmodified on Ubuntu / Docker. |
 | macOS validation | deferred (same posture as rules_playwright v0.1) |
 
 ## Deferred (not v0.1.0)

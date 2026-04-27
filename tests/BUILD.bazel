@@ -77,8 +77,9 @@ capsule_install(name = "capsule_bin", tags = ["manual"])
 
 capsule_health_check(name = "capsule_health_bin", tags = ["manual"])
 
-# Wrapper that sources the kind env file (sets KUBECONFIG) and exec's
-# the rule's capsule_install binary.
+# Wrappers that source the kind cluster's env file (which uses bare
+# `KEY=VALUE` lines, no `export`) under `set -a` so KUBECONFIG/KUBECTL
+# propagate across the `exec` boundary into the rules_capsule binaries.
 sh_binary(
     name = "capsule_install_wrapper",
     srcs = ["capsule_install_wrapper.sh"],
@@ -89,11 +90,21 @@ sh_binary(
     },
 )
 
+sh_binary(
+    name = "capsule_health_wrapper",
+    srcs = ["capsule_health_wrapper.sh"],
+    data = [":capsule_health_bin"],
+    env = {
+        "CLUSTER_NAME": "cluster",
+        "CAPSULE_HEALTH": "$(rootpath :capsule_health_bin)",
+    },
+)
+
 itest_service(
     name = "capsule_svc",
     exe = ":capsule_install_wrapper",
     deps = [":cert_manager_svc"],
-    health_check = ":capsule_health_bin",
+    health_check = ":capsule_health_wrapper",
     tags = ["manual"],
 )
 

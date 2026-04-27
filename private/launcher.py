@@ -43,6 +43,17 @@ def _kubeconfig_from_env(name: str) -> str | None:
     return None
 
 
+def _resolve_kubectl() -> str | None:
+    """Locate `kubectl`. Prefer `$KUBECTL` (set by rules_kind's per-cluster
+    env file, which points at the bundled kubectl that shipped with the
+    `kind_cluster` toolchain — same version as the cluster's API server,
+    no PATH munging needed). Fall back to whatever's on PATH."""
+    cand = os.environ.get("KUBECTL")
+    if cand and os.path.isfile(cand) and os.access(cand, os.X_OK):
+        return cand
+    return shutil.which("kubectl")
+
+
 def _run(cmd: list[str], env: dict[str, str]) -> int:
     print("rules_capsule: " + " ".join(cmd), file=sys.stderr, flush=True)
     return subprocess.run(cmd, env=env).returncode
@@ -54,9 +65,13 @@ def _install(args, env: dict[str, str]) -> int:
         print(f"rules_capsule: manifest not in runfiles: {manifest}", file=sys.stderr)
         return 2
 
-    kubectl = shutil.which("kubectl")
+    kubectl = _resolve_kubectl()
     if not kubectl:
-        print("rules_capsule: `kubectl` not found on PATH", file=sys.stderr)
+        print(
+            "rules_capsule: kubectl not found. Set $KUBECTL (e.g. via "
+            "rules_kind's env file) or put kubectl on $PATH.",
+            file=sys.stderr,
+        )
         return 127
 
     kubeconfig = _kubeconfig_from_env(args.kubeconfig_env)
@@ -68,11 +83,46 @@ def _install(args, env: dict[str, str]) -> int:
         return 2
     env["KUBECONFIG"] = kubeconfig
 
-    rc = _run(
-        [kubectl, "--kubeconfig", kubeconfig, "apply", "-f", manifest,
-         "--server-side=true", "--validate=false"],
-        env,
-    )
+    # The Capsule chart relies on helm's `--create-namespace` to provision
+    # `capsule-system`; the rendered YAML has no Namespace resource, so a
+    # raw `kubectl apply -f` would have its namespaced ServiceAccounts /
+    # Secrets / etc. fail with NotFound. Create the namespace idempotently
+    # by piping a one-line manifest through `kubectl apply -f -`.
+    ns = args.namespace
+    ns_yaml = f"apiVersion: v1\nkind: Namespace\nmetadata:\n  name: {ns}\n"
+    print(f"rules_capsule: ensuring namespace {ns}", file=sys.stderr, flush=True)
+    rc = subprocess.run(
+        [kubectl, "--kubeconfig", kubeconfig, "apply", "-f", "-",
+         "--server-side=true"],
+        input=ns_yaml, text=True, env=env,
+    ).returncode
+    if rc != 0:
+        return rc
+
+    # The manifest also contains CRs of CRDs defined in the same file
+    # (`CapsuleConfiguration` alongside its CRD). A single `apply` races:
+    # the CRD isn't `Established` by the time the CR hits the API. Two
+    # passes with a small sleep resolves it in practice.
+    #
+    # `-n <ns>` is required: the Capsule chart's Deployment template (and
+    # several others) omit `metadata.namespace`, relying on `helm install -n`
+    # to default it. With raw `kubectl apply`, that means resources land in
+    # the kubeconfig's current namespace (`default`) unless we pass -n.
+    # Cluster-scoped resources ignore -n; namespaced ones with explicit
+    # namespaces in metadata still go where they say.
+    apply_cmd = [kubectl, "--kubeconfig", kubeconfig, "-n", ns, "apply",
+                 "-f", manifest, "--server-side=true", "--validate=false"]
+    for attempt in (1, 2):
+        rc = _run(apply_cmd, env)
+        if rc == 0:
+            break
+        if attempt == 1:
+            print(
+                f"rules_capsule: apply attempt {attempt} failed (likely CRD-vs-CR "
+                f"race); retrying once after 5s.",
+                file=sys.stderr,
+            )
+            time.sleep(5)
     if rc != 0:
         return rc
 
@@ -84,9 +134,13 @@ def _install(args, env: dict[str, str]) -> int:
 
 
 def _health_check(args, env: dict[str, str]) -> int:
-    kubectl = shutil.which("kubectl")
+    kubectl = _resolve_kubectl()
     if not kubectl:
-        print("rules_capsule: `kubectl` not found on PATH", file=sys.stderr)
+        print(
+            "rules_capsule: kubectl not found. Set $KUBECTL (e.g. via "
+            "rules_kind's env file) or put kubectl on $PATH.",
+            file=sys.stderr,
+        )
         return 127
 
     kubeconfig = _kubeconfig_from_env(args.kubeconfig_env)

@@ -6,7 +6,7 @@
 # DESIGN.md decision #9.
 set -euo pipefail
 
-CLUSTER_NAME="${CLUSTER_NAME:?missing}"
+CLUSTER_NAME="cluster"
 CAPSULE_INSTALL="${CAPSULE_INSTALL:?missing}"
 
 env_file="$TEST_TMPDIR/${CLUSTER_NAME}.env"

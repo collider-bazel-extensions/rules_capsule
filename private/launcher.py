@@ -68,7 +68,11 @@ def _install(args, env: dict[str, str]) -> int:
         return 2
     env["KUBECONFIG"] = kubeconfig
 
-    rc = _run([kubectl, "apply", "-f", manifest, "--server-side=true"], env)
+    rc = _run(
+        [kubectl, "--kubeconfig", kubeconfig, "apply", "-f", manifest,
+         "--server-side=true", "--validate=false"],
+        env,
+    )
     if rc != 0:
         return rc
 
@@ -100,12 +104,16 @@ def _health_check(args, env: dict[str, str]) -> int:
     #   3. webhook serving (we infer from #2; a Deployment Available implies
     #      readiness probes pass, which for Capsule means the webhook is up)
     ns = args.namespace
-    rc = _run([kubectl, "get", "crd", "tenants.capsule.clastix.io", "-o", "name"], env)
+    rc = _run(
+        [kubectl, "--kubeconfig", kubeconfig, "get", "crd",
+         "tenants.capsule.clastix.io", "-o", "name"],
+        env,
+    )
     if rc != 0:
         return rc
     rc = _run(
-        [kubectl, "-n", ns, "wait", "deploy", "--all",
-         "--for=condition=Available", "--timeout=0s"],
+        [kubectl, "--kubeconfig", kubeconfig, "-n", ns, "wait", "deploy",
+         "--all", "--for=condition=Available", "--timeout=0s"],
         env,
     )
     return rc

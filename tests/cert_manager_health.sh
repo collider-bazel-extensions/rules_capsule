@@ -4,10 +4,10 @@
 # fast — itest retries on non-zero.
 set -euo pipefail
 
-CLUSTER_NAME="${CLUSTER_NAME:?missing}"
+CLUSTER_NAME="cluster"
 env_file="$TEST_TMPDIR/${CLUSTER_NAME}.env"
 [[ -f "$env_file" ]] || exit 1
 # shellcheck disable=SC1090
 source "$env_file"
 
-"$KUBECTL" -n cert-manager wait deploy --all --for=condition=Available --timeout=0s 2>/dev/null
+"$KUBECTL" --kubeconfig="$KUBECONFIG" -n cert-manager wait deploy --all --for=condition=Available --timeout=0s 2>/dev/null

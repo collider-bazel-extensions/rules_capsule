@@ -29,9 +29,9 @@ CAPSULE_VERSIONS = {
 }
 
 CERT_MANAGER = {
-    "version": "1.20.2",
-    "url": "https://github.com/cert-manager/cert-manager/releases/download/v1.20.2/cert-manager.yaml",
-    "sha256": "1ce11cae912adecc69e6bb623435fafc9ed21505f9efff98bd71d7b80f01db1f",
+    "version": "1.18.3",
+    "url": "https://github.com/cert-manager/cert-manager/releases/download/v1.18.3/cert-manager.yaml",
+    "sha256": "f12a78d93d77e1eb9dea0b6d7c931b26da287492fcdf0eb58620142883d4675a",
 }
 
 PLATFORMS = {

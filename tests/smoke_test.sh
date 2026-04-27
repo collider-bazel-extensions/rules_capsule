@@ -4,14 +4,14 @@
 # Active). Proves the install + health_check chain works end-to-end.
 set -euo pipefail
 
-CLUSTER_NAME="${CLUSTER_NAME:?missing}"
+CLUSTER_NAME="cluster"
 env_file="$TEST_TMPDIR/${CLUSTER_NAME}.env"
 [[ -f "$env_file" ]] || { echo "missing kind env file" >&2; exit 1; }
 # shellcheck disable=SC1090
 source "$env_file"
 
 echo "smoke_test: creating Tenant 'alice'"
-"$KUBECTL" apply -f - <<'EOF'
+"$KUBECTL" --kubeconfig="$KUBECONFIG" apply -f - <<'EOF'
 apiVersion: capsule.clastix.io/v1beta2
 kind: Tenant
 metadata:
@@ -25,7 +25,7 @@ EOF
 echo "smoke_test: waiting for Capsule to reconcile"
 deadline=$(( $(date +%s) + 30 ))
 while (( $(date +%s) < deadline )); do
-  state=$("$KUBECTL" get tenant alice -o jsonpath='{.status.state}' 2>/dev/null || true)
+  state=$("$KUBECTL" --kubeconfig="$KUBECONFIG" get tenant alice -o jsonpath='{.status.state}' 2>/dev/null || true)
   if [[ "$state" == "Active" ]]; then
     echo "smoke_test: OK — tenant alice is $state"
     exit 0
@@ -34,5 +34,5 @@ while (( $(date +%s) < deadline )); do
 done
 
 echo "smoke_test: FAIL — tenant alice never reached Active. Last status:" >&2
-"$KUBECTL" get tenant alice -o yaml >&2 || true
+"$KUBECTL" --kubeconfig="$KUBECONFIG" get tenant alice -o yaml >&2 || true
 exit 1

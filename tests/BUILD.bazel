@@ -1,0 +1,117 @@
+"""Tests for rules_capsule.
+
+- Analysis tests verify rules instantiate cleanly without needing a cluster.
+- The smoke test (`:smoke_test`) composes a real kind cluster, cert-manager,
+  and capsule_install via rules_itest. It's `manual`-tagged: needs Docker
+  on the host and pulls ~hundreds of MB of container images. Run with:
+      bazel test //tests:smoke_test --test_tag_filters= --test_output=streamed
+"""
+
+load("@rules_capsule//:defs.bzl", "capsule_health_check", "capsule_install")
+load("@rules_itest//:itest.bzl", "itest_service", "service_test")
+load("@rules_kind//:defs.bzl", "kind_cluster", "kind_health_check")
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load(":analysis_tests.bzl", "capsule_health_check_test_suite", "capsule_install_test_suite")
+
+# ---- analysis ---------------------------------------------------------------
+
+capsule_install_test_suite(name = "capsule_install_analysis")
+
+capsule_health_check_test_suite(name = "capsule_health_check_analysis")
+
+# ---- smoke composition ------------------------------------------------------
+# kind_cluster -> cert-manager itest_service -> capsule_install -> health
+# -> service_test that creates a Tenant and asserts status=Active.
+#
+# Each layer waits for the kind cluster's env file ($TEST_TMPDIR/<name>.env)
+# and sources it to get $KUBECTL + $KUBECONFIG. cert-manager and the
+# capsule_install wrapper share that pattern; capsule_install is the
+# rules_capsule rule itself, just bound to the cluster via env injection.
+
+kind_cluster(
+    name = "cluster",
+    k8s_version = "1.29",
+)
+
+kind_health_check(
+    name = "cluster_health",
+    cluster = ":cluster",
+)
+
+itest_service(
+    name = "kind_svc",
+    exe = ":cluster",
+    health_check = ":cluster_health",
+    tags = ["manual"],
+)
+
+# cert-manager: applies the pinned cert-manager.yaml fetched by the
+# http_file repo rule in MODULE.bazel.
+sh_binary(
+    name = "cert_manager_install",
+    srcs = ["cert_manager_install.sh"],
+    data = ["@cert_manager_yaml//file"],
+    env = {
+        "CLUSTER_NAME": "cluster",
+        "CERT_MANAGER_YAML": "$(rootpath @cert_manager_yaml//file)",
+    },
+)
+
+sh_binary(
+    name = "cert_manager_health",
+    srcs = ["cert_manager_health.sh"],
+    env = {"CLUSTER_NAME": "cluster"},
+)
+
+itest_service(
+    name = "cert_manager_svc",
+    exe = ":cert_manager_install",
+    deps = [":kind_svc"],
+    health_check = ":cert_manager_health",
+    tags = ["manual"],
+)
+
+# Capsule itself, via the rule under test.
+capsule_install(name = "capsule_bin", tags = ["manual"])
+
+capsule_health_check(name = "capsule_health_bin", tags = ["manual"])
+
+# Wrapper that sources the kind env file (sets KUBECONFIG) and exec's
+# the rule's capsule_install binary.
+sh_binary(
+    name = "capsule_install_wrapper",
+    srcs = ["capsule_install_wrapper.sh"],
+    data = [":capsule_bin"],
+    env = {
+        "CLUSTER_NAME": "cluster",
+        "CAPSULE_INSTALL": "$(rootpath :capsule_bin)",
+    },
+)
+
+itest_service(
+    name = "capsule_svc",
+    exe = ":capsule_install_wrapper",
+    deps = [":cert_manager_svc"],
+    health_check = ":capsule_health_bin",
+    tags = ["manual"],
+)
+
+# The actual smoke assertion: Tenant lifecycle.
+sh_test(
+    name = "smoke_test_bin",
+    srcs = ["smoke_test.sh"],
+    env = {"CLUSTER_NAME": "cluster"},
+    tags = ["manual"],
+)
+
+service_test(
+    name = "smoke_test",
+    services = [":capsule_svc"],
+    test = ":smoke_test_bin",
+    tags = [
+        "manual",  # needs Docker; ~2 minute warm-up.
+        "no-sandbox",
+        "requires-network",
+    ],
+)

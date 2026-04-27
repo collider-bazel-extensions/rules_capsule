@@ -1,0 +1,47 @@
+"""rules_capsule — hermetic Project Capsule install + readiness for Bazel tests."""
+
+module(
+    name = "rules_capsule",
+    version = "0.1.0",
+)
+
+bazel_dep(name = "bazel_skylib", version = "1.8.2")
+bazel_dep(name = "platforms", version = "1.0.0")
+bazel_dep(name = "rules_python", version = "1.7.0")
+
+capsule = use_extension("//:extensions.bzl", "capsule")
+
+# Download mode: Bazel resolves a pinned cert-manager manifest (smoke-test only)
+# and exposes the pre-rendered Capsule manifest (committed under
+# private/manifests/) via a toolchain.
+capsule.version(
+    name = "capsule",
+    version = "0.10.4",
+)
+
+use_repo(capsule, "capsule")
+
+register_toolchains("@capsule//:all")
+
+# ---- dev-only: rules_kind + rules_itest for the smoke test ------------------
+# Consumers do NOT inherit these. The in-tree smoke test composes a kind
+# cluster, cert-manager, and capsule_install via rules_itest. rules_kind is
+# pinned via git_override since it is not (yet) in BCR.
+bazel_dep(name = "rules_itest", version = "0.0.52", dev_dependency = True)
+bazel_dep(name = "rules_shell", version = "0.8.0", dev_dependency = True)
+bazel_dep(name = "rules_kind", version = "0.1.0", dev_dependency = True)
+git_override(
+    module_name = "rules_kind",
+    remote = "https://github.com/collider-bazel-extensions/rules_kind",
+    commit = "9c587cb92d50a66cfe8cd07899d60cd41b805faa",
+)
+
+# cert-manager.yaml fetched at the sha256 pinned in private/versions.bzl. Used
+# only by the in-tree smoke test (decision #6) — not exported as a public dep.
+http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
+http_file(
+    name = "cert_manager_yaml",
+    urls = ["https://github.com/cert-manager/cert-manager/releases/download/v1.20.2/cert-manager.yaml"],
+    sha256 = "1ce11cae912adecc69e6bb623435fafc9ed21505f9efff98bd71d7b80f01db1f",
+    downloaded_file_path = "cert-manager.yaml",
+)

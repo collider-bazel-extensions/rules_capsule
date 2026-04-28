@@ -8622,7 +8622,7 @@ spec:
       serviceAccountName: capsule-crds
       containers:
       - name: crds-hook
-        image: docker.io/clastix/kubectl:v1.31
+        image: docker.io/clastix/kubectl:v1.35
         imagePullPolicy: IfNotPresent
         securityContext:
           allowPrivilegeEscalation: false
@@ -8733,7 +8733,7 @@ spec:
       serviceAccountName: capsule-post-install
       containers:
       - name: post-install
-        image: docker.io/clastix/kubectl:v1.31
+        image: docker.io/clastix/kubectl:v1.35
         imagePullPolicy: IfNotPresent
         command:
         - "sh"
@@ -8790,7 +8790,7 @@ spec:
       serviceAccountName: capsule-pre-delete
       containers:
         - name: pre-delete-job
-          image: docker.io/clastix/kubectl:v1.31
+          image: docker.io/clastix/kubectl:v1.35
           imagePullPolicy: IfNotPresent
           command:
           - "/bin/sh"

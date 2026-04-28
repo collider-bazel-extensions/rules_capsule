@@ -5,6 +5,8 @@ Schema:
     CAPSULE_VERSIONS = {
         "<capsule-version>": {
             "manifest_sha256": "<sha256 of the rendered Capsule manifest>",
+            "chart_url":       "<URL of capsule-<ver>.tgz>",
+            "chart_sha256":    "<sha256 of the chart .tgz>",
         },
     }
 
@@ -18,13 +20,19 @@ The Capsule manifest itself is pre-rendered (`helm template …`) by a maintaine
 and committed under `private/manifests/capsule-<ver>.yaml`. We sha256-check it
 at build time so a tampered checkout fails loudly.
 
+The chart .tgz is used by the maintainer-side render flow only
+(`bazel run //tools:render_writeback -- <version>`). Consumers don't download
+it; they consume the committed pre-rendered manifest.
+
 cert-manager is pinned for the in-tree smoke test only — it is not part of
 the public `capsule_install` contract. See DESIGN.md decision #6.
 """
 
 CAPSULE_VERSIONS = {
     "0.10.4": {
-        "manifest_sha256": "f6ee579854a0558d04e752302954fa6108b6e89e7fb659f2b13bd78c30050b57",
+        "manifest_sha256": "b8978571f4233ef74b63e245eb91f29b1c55148a5dbe96b14073d6773872ccc5",
+        "chart_url":       "https://projectcapsule.github.io/charts/capsule-0.10.4.tgz",
+        "chart_sha256":    "666534a2c377259908a1870057aa8a3f9c080e3cca98ad56d2c0068680e38fc2",
     },
 }
 

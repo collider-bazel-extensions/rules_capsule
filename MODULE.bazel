@@ -49,3 +49,32 @@ cert_manager = use_extension("@rules_certmanager//:extensions.bzl", "cert_manage
 cert_manager.version(version = "1.18.3")
 use_repo(cert_manager, "cert_manager")
 register_toolchains("@cert_manager//:all", dev_dependency = True)
+
+# ---- dev-only: rules_helm + chart fetch for the maintainer render flow ------
+# Consumers don't inherit any of this. The chart .tgz is fetched (sha-pinned
+# from CAPSULE_VERSIONS) so `bazel run //tools:render_writeback -- <version>`
+# can render the manifest hermetically without host helm.
+bazel_dep(name = "rules_helm", version = "0.2.1", dev_dependency = True)
+git_override(
+    module_name = "rules_helm",
+    remote = "https://github.com/collider-bazel-extensions/rules_helm",
+    commit = "48651387d55f0c50f6d059df246ed73767100afb",  # v0.2.1 — subchart-aware chart-root detection
+)
+
+helm = use_extension("@rules_helm//:extensions.bzl", "helm", dev_dependency = True)
+helm.version(version = "3.20.2")
+use_repo(helm,
+    "helm_linux_amd64",
+    "helm_darwin_amd64",
+    "helm_darwin_arm64",
+)
+register_toolchains(
+    "@helm_linux_amd64//:toolchain",
+    "@helm_darwin_amd64//:toolchain",
+    "@helm_darwin_arm64//:toolchain",
+    dev_dependency = True,
+)
+
+capsule_chart = use_extension("//tools:extensions.bzl", "capsule_chart", dev_dependency = True)
+capsule_chart.version(version = "0.10.4")
+use_repo(capsule_chart, "capsule_chart_0_10_4")

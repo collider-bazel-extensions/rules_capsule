@@ -1,0 +1,48 @@
+"""Maintainer-only render flow.
+
+Pipeline:
+  @capsule_chart_<ver>//:files  →  helm_template  →  bazel-bin/tools/capsule_<ver>.yaml
+                                                    │
+                                                    ▼
+                                        bazel run //tools:render_writeback_<ver>
+                                                    │
+                                                    ▼
+                                  private/manifests/capsule-<ver>.yaml (committed)
+
+Adding a new Capsule version:
+  1. `bash tools/update_chart_sha.sh <version>` — curls the chart .tgz,
+     computes its sha256, rewrites private/versions.bzl::CAPSULE_VERSIONS.
+  2. Add a `helm_template` + `sh_binary` block below for the new version
+     (or invoke a macro — see `_capsule_render_target`).
+  3. `bazel run //tools:render_writeback_<version>` — renders the chart
+     and copies the result into private/manifests/, then auto-updates
+     CAPSULE_VERSIONS[<version>].manifest_sha256.
+
+NO host helm needed at any point. The hermetic helm binary comes from
+rules_helm (a dev-only dependency, declared in MODULE.bazel).
+"""
+
+load("@rules_helm//:defs.bzl", "helm_template")
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+
+# ---- 0.10.4 -----------------------------------------------------------------
+
+helm_template(
+    name = "render_capsule_0_10_4",
+    chart = ["@capsule_chart_0_10_4//:files"],
+    namespace = "capsule-system",
+    release_name = "capsule",
+    include_crds = True,
+)
+
+sh_binary(
+    name = "render_writeback_0_10_4",
+    srcs = ["writeback.sh"],
+    data = [":render_capsule_0_10_4"],
+    args = [
+        "$(rootpath :render_capsule_0_10_4)",
+        "private/manifests/capsule-0.10.4.yaml",
+        "0.10.4",
+    ],
+    visibility = ["//visibility:public"],
+)

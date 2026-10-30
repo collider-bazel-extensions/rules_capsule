@@ -291,27 +291,20 @@ Conventions:
   update `private/versions.bzl` with the new sha256.
 - `MODULE.bazel.lock` is intentionally not committed (matches sibling rules).
 
-### Help wanted: end-to-end smoke test on a Docker host
+### End-to-end smoke test
 
-The smoke test composition (`//tests:smoke_test`) is **build-validated**
-(`bazel build //tests:smoke_test` is green) but **not yet runtime-validated**
-on any host. Two upstream gates currently block it:
+The smoke test composition (`//tests:smoke_test`: kind → cert-manager →
+capsule_install → health) is **runtime-validated**: it passed on 2026-10-30
+under rootless podman (Fedora, kernel 7.0) with rules_kind v0.2.0 and
+`k8s_version = "1.35"`.
 
-1. **[rules_kind#1](https://github.com/collider-bazel-extensions/rules_kind/issues/1):**
-   the `kind_cluster` launcher propagates Bazel's long `TEST_TMPDIR` via
-   `TMPDIR`/`HOME`, exceeding the 108-char unix-socket limit and breaking
-   rootless `podman`'s `conmon-term` socket. A patch is sketched in the
-   issue; once it lands, kind clusters come up under `bazel test`.
-2. **Rootless podman + nested containerd:** even with #1, cert-manager pods
-   inside the kind node fail with
-   `runc create failed: error mounting /etc/hostname: operation not permitted`
-   because the inner user namespace can't bind-mount system files. **Docker
-   (rooted by daemon) or rootful podman both clear it.** Pure rootless
-   podman fundamentally cannot run kind workloads that need bind mounts.
+The two blockers this section used to list are gone. The long-`TMPDIR`
+socket problem was fixed in rules_kind (rules_kind#1). The
+`runc create failed: error mounting /etc/hostname` failure came from the
+runc 1.1.x in the old `kindest/node:v1.29.2` image; the 1.35 image's runc
+doesn't have it.
 
-Bottom line: a green run on `ubuntu-latest` GitHub Actions (or any host with
-docker) would flip the smoke test from build-validated to runtime-validated
-in v0.1.x. A pasted CI log is enough.
+The test is still `manual` and not in CI. CI runs analysis only.
 
 ### Help wanted: macOS validation
 

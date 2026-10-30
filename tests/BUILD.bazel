@@ -32,7 +32,7 @@ capsule_health_check_test_suite(name = "capsule_health_check_analysis")
 
 kind_cluster(
     name = "cluster",
-    k8s_version = "1.29",
+    k8s_version = "1.35",
 )
 
 kind_health_check(

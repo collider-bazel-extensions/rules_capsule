@@ -162,7 +162,7 @@ load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
 # 1. The cluster.
-kind_cluster(name = "cluster", k8s_version = "1.29")
+kind_cluster(name = "cluster", k8s_version = "1.35")
 kind_health_check(name = "cluster_health", cluster = ":cluster")
 itest_service(name = "kind_svc", exe = ":cluster", health_check = ":cluster_health")
 

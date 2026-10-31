@@ -36,14 +36,35 @@ Anything Capsule-specific is flagged.
 - Capsule depends on a cluster TLS provider (cert-manager, trust-manager, or equivalent) for its admission webhooks. v0.1 punts this to the consumer; the smoke test wires cert-manager explicitly so the contract is observable in-repo.
 - Capsule's `Tenant` is a CRD; `kubectl apply -f tenant.yaml` is sufficient to create one. There's no need for a `capsule_tenant` rule in v0.1 — users author tenant YAML directly. A macro can be added later if a real consumer asks for it.
 
+## Rendering and version policy (v0.2.0)
+
+- **`--no-hooks`.** Manifests are rendered with `helm template --no-hooks`
+  (`helm_template_args` in `tools/BUILD.bazel`). Helm hooks are install /
+  delete lifecycle steps; under `kubectl apply` they'd all run at install.
+  Before v0.2.0 the 0.10.4 manifest contained the chart's `pre-delete`
+  Job, which deleted `capsule-tls` and Capsule's ClusterRoles right after
+  install; 0.15.2's `post-delete` Job deletes the webhook configurations.
+  The CRD-install hook is redundant: CRDs come from the chart's `crds/`
+  directory (`include_crds = True`). v0.2.0 re-rendered 0.10.4 this way;
+  the only change is the removed hook objects (Jobs and their RBAC and
+  ConfigMaps), so its `manifest_sha256` changed.
+- **`--force-conflicts`.** `capsule_install` applies server-side twice
+  (CRD-then-CR race). By the second pass the 0.15 controller may already
+  own fields it rewrote (`cacheInvalidation: 0h30m0s` → `30m0s`); the
+  pinned manifest wins.
+- **Versions are added, never replaced**, so a consumer's
+  `capsule.version(version = ...)` keeps working across releases. The
+  smoke test runs the newest pin on the newest rules_kind default (0.15.2
+  on Kubernetes 1.35).
+
 ## v0.1.0 status (planning)
 
 | Area | State |
 |---|---|
 | MODULE.bazel (Bzlmod-only) | planned |
 | Module extension (`version`) | planned |
-| Pre-rendered Capsule manifest at 0.10.4 (sha256-pinned) | planned |
-| Pinned cert-manager.yaml at 1.20.2 (smoke-test only) | planned |
+| Pre-rendered Capsule manifests at 0.10.4 and 0.15.2 (sha256-pinned; 0.15.2 since v0.2.0) | done |
+| cert-manager for the smoke test | via rules_certmanager (1.21.3 since v0.2.0) |
 | `capsule_install`, `capsule_health_check` rules | planned |
 | `launcher.py` (env, exec, SIGTERM forwarding) | planned |
 | Analysis tests | planned |

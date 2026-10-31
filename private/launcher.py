@@ -110,8 +110,14 @@ def _install(args, env: dict[str, str]) -> int:
     # the kubeconfig's current namespace (`default`) unless we pass -n.
     # Cluster-scoped resources ignore -n; namespaced ones with explicit
     # namespaces in metadata still go where they say.
+    #
+    # `--force-conflicts`: by the second pass the controller may already be
+    # running and own fields it rewrote, e.g. Capsule 0.15 normalizes the
+    # CapsuleConfiguration's `cacheInvalidation: 0h30m0s` to `30m0s`. The
+    # pinned manifest is the source of truth, so take those fields back.
     apply_cmd = [kubectl, "--kubeconfig", kubeconfig, "-n", ns, "apply",
-                 "-f", manifest, "--server-side=true", "--validate=false"]
+                 "-f", manifest, "--server-side=true", "--force-conflicts",
+                 "--validate=false"]
     for attempt in (1, 2):
         rc = _run(apply_cmd, env)
         if rc == 0:

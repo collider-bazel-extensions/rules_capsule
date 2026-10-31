@@ -2,7 +2,7 @@
 
 module(
     name = "rules_capsule",
-    version = "0.1.3",
+    version = "0.2.0",
 )
 
 bazel_dep(name = "bazel_skylib", version = "1.8.2")
@@ -16,7 +16,7 @@ capsule = use_extension("//:extensions.bzl", "capsule")
 # private/manifests/) via a toolchain.
 capsule.version(
     name = "capsule",
-    version = "0.10.4",
+    version = "0.15.2",
 )
 
 use_repo(capsule, "capsule")
@@ -38,15 +38,15 @@ git_override(
     commit = "91ff914ccf55fdd627e7cda3d83d7e4ae8206c14",  # v0.2.0 — k8s 1.35/1.36/1.37, digest-pinned kindest/node images
 )
 
-bazel_dep(name = "rules_certmanager", version = "0.1.2", dev_dependency = True)
+bazel_dep(name = "rules_certmanager", version = "0.2.0", dev_dependency = True)
 git_override(
     module_name = "rules_certmanager",
     remote = "https://github.com/collider-bazel-extensions/rules_certmanager",
-    commit = "bff7f86589c7a58a42a989f08cb098d790963f06",  # v0.1.2 — block install on Deployments-Available
+    commit = "80ca2b1c881120786edf74991ebdb1fa866e509a",  # v0.2.0 — cert-manager 1.21.3 / 1.20.5
 )
 
 cert_manager = use_extension("@rules_certmanager//:extensions.bzl", "cert_manager", dev_dependency = True)
-cert_manager.version(version = "1.18.3")
+cert_manager.version(version = "1.21.3")
 use_repo(cert_manager, "cert_manager")
 register_toolchains("@cert_manager//:all", dev_dependency = True)
 
@@ -77,4 +77,5 @@ register_toolchains(
 
 capsule_chart = use_extension("//tools:extensions.bzl", "capsule_chart", dev_dependency = True)
 capsule_chart.version(version = "0.10.4")
-use_repo(capsule_chart, "capsule_chart_0_10_4")
+capsule_chart.version(version = "0.15.2")
+use_repo(capsule_chart, "capsule_chart_0_10_4", "capsule_chart_0_15_2")

@@ -11,8 +11,15 @@ any cluster the consumer provides via `KUBECONFIG`).
 manifest) but not validated. See
 [Contributing → Help wanted: macOS validation](#help-wanted-macos-validation).
 
-**Pinned versions:** Capsule 0.10.4 (chart pre-rendered with `helm template`,
-sha256-verified). cert-manager wiring lives in
+**Pinned versions:** charts pre-rendered with `helm template --no-hooks`,
+committed, and sha256-verified. Pick one with `capsule.version()`:
+
+| Capsule | Kubernetes | Notes |
+|---|---|---|
+| `0.15.2` | 1.35 supported (first listed in Capsule 0.13.0) | Recommended. Needs cert-manager for its webhook certificates. The in-tree smoke test runs it on kind 1.35 with cert-manager 1.21.3. See [Upgrading from 0.10.4](#upgrading-from-capsule-0104-to-0152). |
+| `0.10.4` | 1.35 not listed as supported upstream | Kept for existing consumers. The smoke test also passes on it on kind 1.35. |
+
+cert-manager wiring lives in
 [`rules_certmanager`](https://github.com/collider-bazel-extensions/rules_certmanager) —
 not part of the public `capsule_install` contract; see [TLS provider
 prerequisite](#tls-provider-prerequisite).
@@ -44,10 +51,10 @@ prerequisite](#tls-provider-prerequisite).
 ## Installation
 
 ```python
-bazel_dep(name = "rules_capsule", version = "0.1.0")
+bazel_dep(name = "rules_capsule", version = "0.2.0")
 
 capsule = use_extension("@rules_capsule//:extensions.bzl", "capsule")
-capsule.version(version = "0.10.4")
+capsule.version(version = "0.15.2")  # see the version table above
 use_repo(capsule, "capsule")
 
 register_toolchains("@capsule//:all")
@@ -232,7 +239,7 @@ A single Capsule install (currently always one per toolchain).
 
 | Field | Type | Description |
 |---|---|---|
-| `version` | `string` | Capsule version, e.g. `"0.10.4"` |
+| `version` | `string` | Capsule version, e.g. `"0.15.2"` |
 | `manifest` | `File` | The pre-rendered, sha256-verified Capsule install YAML |
 | `namespace` | `string` | Namespace the rendered manifest installs into (default `"capsule-system"`) |
 
@@ -257,6 +264,14 @@ Reasons:
    — which any consumer can compose with rules_capsule (or use
    independently for any operator that needs cert-manager).
 
+Since Capsule 0.13.0, cert-manager is a hard requirement with the default
+chart values, which is what the pinned manifests use: the 0.15.2 manifest
+contains a cert-manager `Issuer` and `Certificate` (`capsule-webhook-cert`),
+and the webhook configurations get their CA from cert-manager's CA
+injector. Install cert-manager (and wait for it to be Available) before
+`capsule_install`. 0.10.4 can mint its own certificates
+(`enableTLSReconciler: true`).
+
 For the in-tree smoke test we depend on `rules_certmanager` directly
 (`bazel_dep` with `dev_dependency = True`) and apply it as a separate
 `itest_service` upstream of `capsule_install`. See the example above for
@@ -264,11 +279,53 @@ the shape, or `tests/BUILD.bazel` for the canonical wiring.
 
 ---
 
+## Upgrading from Capsule 0.10.4 to 0.15.2
+
+Found by diffing the two pinned manifests' CRD schemas, plus the
+breaking changes in Capsule's release notes. `capsule.version()` keeps
+0.10.4 available; switch when ready.
+
+- **API versions unchanged.** `capsule.clastix.io/v1beta2` is still the
+  storage version for every CRD; `Tenant` still also serves `v1beta1`.
+  Existing `v1beta2` Tenant YAML applies unchanged.
+- **Schema changes are additive.** No field was removed or changed type.
+  - `Tenant`: `spec.owners` is no longer required. New: `spec.permissions`
+    (`matchOwners`, `allowOwnerPromotion`), `spec.rules`, `spec.data`,
+    `spec.deviceClasses`, `spec.gatewayOptions.allowedClasses`,
+    `spec.namespaceOptions.requiredMetadata` / `managedMetadataOnly`,
+    labels and annotations on `owners[]` and `additionalRoleBindings[]`.
+  - `TenantResource` / `GlobalTenantResource`: new required `spec.settings`
+    (defaults to `{}`: `adopt: false`, `force: false`), plus `cordoned`,
+    `dependsOn`, `serviceAccount`, per-resource `generators` / `context` /
+    `policy`; `GlobalTenantResource` adds `scope`.
+  - New CRDs: `CustomQuota`, `GlobalCustomQuota`, `GlobalResourceQuota`,
+    `QuantityLedger`, `RuleStatus`, `TenantOwner`.
+- **`CapsuleConfiguration` (`default`).** `userGroups` / `userNames` are
+  deprecated in favour of `users: [{kind: Group, name: ...}]`; the pinned
+  manifest sets `users` to the same group as before (`projectcapsule.dev`).
+  New required fields `cacheInvalidation` and `rbac` are set by the chart.
+- **Webhooks.** 0.10.4 shipped static `capsule-mutating-webhook-configuration`
+  / `capsule-validating-webhook-configuration` objects. 0.15.2 has none in
+  the manifest: the controller creates `capsule-dynamic-webhook` (mutating
+  and validating) from `CapsuleConfiguration.spec.admission`, with the CA
+  injected by cert-manager.
+- **TLS.** cert-manager is required (Capsule 0.13.0 breaking change); see
+  [TLS provider prerequisite](#tls-provider-prerequisite).
+- **TenantResources** run as the namespace's `default` ServiceAccount
+  unless `spec.serviceAccount` is set (Capsule 0.14.0 breaking change).
+- **Security fixes.** 0.15.0 fixes four advisories (GHSA-p8j8-x28r-3c9v,
+  GHSA-4qv9-xv9f-w5xh, GHSA-wpv2-mpqq-vv52, GHSA-jc72-9675-pcmv).
+
+Upstream release notes:
+<https://github.com/projectcapsule/capsule/releases>.
+
+---
+
 ## Hermeticity exceptions
 
 | Component | Hermeticity status | Notes |
 |---|---|---|
-| Capsule install YAML | Fully hermetic. Pre-rendered with `helm template` by a maintainer (`tools/render_capsule.sh`), committed under `private/manifests/`, sha256 in `private/versions.bzl`. | Update via the maintainer tool when bumping versions. Helm is **not** required at consumer test time. |
+| Capsule install YAML | Fully hermetic. Pre-rendered with `helm template --no-hooks` by a maintainer (`tools/render_capsule.sh`), committed under `private/manifests/`, sha256 in `private/versions.bzl`. | Update via the maintainer tool when bumping versions. Helm is **not** required at consumer test time. |
 | `kubectl` | **Not vendored.** v0.1 trusts host `kubectl` on PATH. | Future v0.x: bundle a hermetic kubectl via toolchain. |
 | Target cluster | Out of scope. Bring your own (`rules_kind`, real cluster, etc.). | The rule reads `KUBECONFIG` from env — anything that points there works. |
 | TLS provider for webhooks | Out of scope. Bring your own. | See [TLS provider prerequisite](#tls-provider-prerequisite). |

@@ -33,6 +33,11 @@ helm_template(
     namespace = "capsule-system",
     release_name = "capsule",
     include_crds = True,
+    # Hooks are helm-install lifecycle steps. Under `kubectl apply` they'd
+    # run at install time, including the pre-/post-delete Jobs that delete
+    # capsule-tls, Capsule's ClusterRoles and its webhooks. CRDs still come
+    # from the chart's crds/ directory (include_crds).
+    helm_template_args = ["--no-hooks"],
 )
 
 sh_binary(
@@ -43,6 +48,33 @@ sh_binary(
         "$(rootpath :render_capsule_0_10_4)",
         "private/manifests/capsule-0.10.4.yaml",
         "0.10.4",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+# ---- 0.15.2 -----------------------------------------------------------------
+
+helm_template(
+    name = "render_capsule_0_15_2",
+    chart = ["@capsule_chart_0_15_2//:files"],
+    namespace = "capsule-system",
+    release_name = "capsule",
+    include_crds = True,
+    # Hooks are helm-install lifecycle steps. Under `kubectl apply` they'd
+    # run at install time, including the pre-/post-delete Jobs that delete
+    # capsule-tls, Capsule's ClusterRoles and its webhooks. CRDs still come
+    # from the chart's crds/ directory (include_crds).
+    helm_template_args = ["--no-hooks"],
+)
+
+sh_binary(
+    name = "render_writeback_0_15_2",
+    srcs = ["writeback.sh"],
+    data = [":render_capsule_0_15_2"],
+    args = [
+        "$(rootpath :render_capsule_0_15_2)",
+        "private/manifests/capsule-0.15.2.yaml",
+        "0.15.2",
     ],
     visibility = ["//visibility:public"],
 )

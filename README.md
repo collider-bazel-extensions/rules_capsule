@@ -51,18 +51,32 @@ prerequisite](#tls-provider-prerequisite).
 ## Installation
 
 ```python
-bazel_dep(name = "rules_capsule", version = "0.2.0")
-
-capsule = use_extension("@rules_capsule//:extensions.bzl", "capsule")
-capsule.version(version = "0.15.2")  # see the version table above
-use_repo(capsule, "capsule")
-
-register_toolchains("@capsule//:all")
+bazel_dep(name = "rules_capsule", version = "0.2.1")
 ```
 
-`rules_capsule` is **Bzlmod-only** in v0.1 — `repositories.bzl` exists but
-exports no top-level setup macros. Until the rule lands in BCR, consume via
-`archive_override` or a git pin pointing at a tag.
+That's all: rules_capsule's own `MODULE.bazel` fetches its pinned Capsule
+(0.15.2) as `@capsule` and registers the toolchain. `rules_capsule` is
+**Bzlmod-only**; until it lands in BCR, consume via `archive_override` or a
+git pin pointing at a tag.
+
+To choose the Capsule version, set it in your root module:
+
+```python
+capsule = use_extension("@rules_capsule//:extensions.bzl", "capsule")
+capsule.version(version = "0.15.2")  # see the version table above
+```
+
+The root module's `capsule.version()` tags override rules_capsule's own by
+`name` (default `"capsule"`); other modules' tags are ignored. Giving one name
+two versions, or a version not in `private/versions.bzl`, fails with a message
+naming `capsule.version`. Through v0.2.0 the root had to set `capsule.version()`,
+or resolution failed with `does not generate repository "capsule"`; the
+`use_repo(capsule, "capsule")` / `register_toolchains("@capsule//:all")` lines
+earlier READMEs asked for are harmless but no longer needed.
+
+The release archive (the tag tarball) leaves out `tests/` and `tools/`, so
+`bazel query @rules_capsule//...` works for consumers. A `git_override` clone
+still contains them; name packages instead (for example `@rules_capsule//:all`).
 
 ---
 

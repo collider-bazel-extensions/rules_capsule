@@ -1,0 +1,5 @@
+# Keep the release archive loadable for consumers: tests/ loads dev-only
+# modules (rules_itest, rules_kind, rules_shell, rules_certmanager) and tools/ loads rules_helm, so they are left out of GitHub's tag tarballs,
+# which honour export-ignore. (A git_override clone still has them.)
+tests/ export-ignore
+tools/ export-ignore

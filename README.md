@@ -397,3 +397,11 @@ git clone https://github.com/collider-bazel-extensions/rules_capsule
 cd rules_capsule
 bazel test //tests:smoke_test --test_tag_filters= --test_output=streamed --test_timeout=600
 ```
+
+---
+
+## Requesting a new rules package
+
+Want Bazel rules for another tool or service?
+[Request a rules package](https://github.com/collider-bazel-extensions/.github/issues/new?template=request-a-rules-package.yml).
+The [organization page](https://github.com/collider-bazel-extensions) lists every package.

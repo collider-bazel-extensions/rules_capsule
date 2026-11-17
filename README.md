@@ -51,7 +51,7 @@ prerequisite](#tls-provider-prerequisite).
 ## Installation
 
 ```python
-bazel_dep(name = "rules_capsule", version = "0.2.1")
+bazel_dep(name = "rules_capsule", version = "0.2.2")
 ```
 
 That's all: rules_capsule's own `MODULE.bazel` fetches its pinned Capsule
@@ -405,3 +405,9 @@ bazel test //tests:smoke_test --test_tag_filters= --test_output=streamed --test_
 Want Bazel rules for another tool or service?
 [Request a rules package](https://github.com/collider-bazel-extensions/.github/issues/new?template=request-a-rules-package.yml).
 The [organization page](https://github.com/collider-bazel-extensions) lists every package.
+
+## License
+
+[Apache License 2.0](LICENSE) (SPDX: `Apache-2.0`).
+
+Manifests in `private/manifests/` that are rendered from upstream charts or releases remain under their upstream projects' licences.
